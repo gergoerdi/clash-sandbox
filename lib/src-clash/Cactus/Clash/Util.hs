@@ -96,8 +96,8 @@ predIdx x | x == 0 = Nothing
 
 debounce
     :: forall domain gated synchronous n. (HiddenClockReset domain gated synchronous, KnownNat n)
-    => SNat n -> Signal domain Bool -> (Signal domain Bool, Signal domain Bool)
-debounce n = unbundle . mealyState step (0 :: Unsigned n, False)
+    => SNat n -> Signal domain Bool -> (Signal domain (Maybe Bool))
+debounce n = mealyState step (0 :: Unsigned n, False)
   where
     step button = do
         (counter, prev) <- get
@@ -110,6 +110,4 @@ debounce n = unbundle . mealyState step (0 :: Unsigned n, False)
               | otherwise = counter + 1
         put (counter', button)
 
-        let up = not changing && stable && not button
-            down = not changing && stable && button
-        return (up, down)
+        return $ button <$ guard (not changing && stable)
