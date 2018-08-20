@@ -151,6 +151,7 @@ stepCPU cpuIn@CPUIn{..} = do
                         return (Nothing, Nothing, False)
                     Just EndLoop
                       | cpuInRead == 0 -> do
+                        pop
                         return (Nothing, Nothing, False)
                       | otherwise -> do
                         pc <- pop
