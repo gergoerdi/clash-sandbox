@@ -12,10 +12,10 @@ computer
     => FilePath
     -> Signal domain (Maybe Word8)
     -> Signal domain Bool
-    -> (Signal domain (Maybe Word8), Signal domain Bool)
-computer romFile input outputAck = (output, needInput)
+    -> (Signal domain (Maybe Word8), Signal domain Bool, Signal domain CPUState)
+computer romFile input outputAck = (output, needInput, cpuState)
   where
-    cpuOut = mealyState stepCPU cpuState0 cpuIn
+    (cpuState, cpuOut) = unbundle $ mealyState stepCPU cpuState0 cpuIn
     cpuIn = CPUIn <$> romOut <*> ramOut <*> outputAck <*> input
 
     romOut = unpack <$> blockRamFile d1024 romFile (cpuOutPC <$> cpuOut) (pure Nothing)

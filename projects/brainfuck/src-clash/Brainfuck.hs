@@ -32,46 +32,41 @@ topEntity
     -> Signal System (Vec 8 Bit)
     -> Signal System Bit
     -> ( (Signal System (Vec 4 Bit), Signal System (Vec 7 Bit), Signal System Bit)
-      , Signal System (Vec 1 Bit)
+      , Signal System (Vec 2 Bit)
       , Signal System Bit
       )
 topEntity = exposeClockReset board
-
-board
-    :: (HiddenClockReset domain gated synchronous)
-    => Signal domain (Vec 8 Bit)
-    -> Signal domain Bit
-    -> ( (Signal domain (Vec 4 Bit), Signal domain (Vec 7 Bit), Signal domain Bit)
-      , Signal domain (Vec 1 Bit)
-      , Signal domain Bit
-      )
-board switches btn0 = ((anodes, segments, dp), singleton <$> led, serialOut)
   where
-    dim s = (.&&.) <$> (repeat <$> countTo 64) <*> s
-    anodes = activeLow <$> dim (ssMask <$> ss)
-    segments = ssSegments <$> ss'
-    dp = ssDP <$> ss'
-    serialOut = txOut <$> tx clkRate serialRate output
-    led = activeHigh $ isJust <$> output
+    board switches btn0 = ((anodes, segments, dp), leds, serialOut)
+      where
+        dim s = (.&&.) <$> (repeat <$> countTo 64) <*> s
+        anodes = activeLow <$> dim (ssMask <$> ss)
+        segments = ssSegments <$> ss'
+        dp = ssDP <$> ss'
+        serialOut = txOut <$> tx clkRate serialRate output
 
-    btn = fmap (fromMaybe False) . debounce d16 . fmap (bitToBool . complement) $ btn0
+        leds = bundle $ activeHigh (isJust <$> output)  :> activeHigh needInput :> Nil
 
-    rawInput = unpack . v2bv <$> switches
-    input = gate <$> btn <*> rawInput
-    ackOutput = rising btn
+        btn = rising . fmap (fromMaybe False) . debounce d16 . fmap (bitToBool . complement) $ btn0
 
-    (output, needInput) = computer "prog.rom" input ackOutput
+        rawInput = unpack . v2bv <$> switches
+        input = gate <$> btn <*> rawInput
+        ackOutput = btn
 
-    (ihi, ilo) = unbundle $ splitByte <$> rawInput
-    (ohi, olo) = unbundle $ splitByte . fromMaybe 0 <$> output
-    -- (ohi, olo) = unbundle $ splitByte . unpack . pack <$> (cpuOutPC <$> cpuOut)
+        (output, needInput, cpuState) = computer "prog.rom" input ackOutput
 
-    digits = ilo :> ihi :> olo :> ohi :> Nil
-    ss = driveSS 10000 (bundle digits)
+        (ihi, ilo) = unbundle $ splitByte <$> rawInput
+        (ohi, olo) = unbundle $ splitByte . fromMaybe 0 <$> output
+        -- (ohi, olo) = unbundle $ splitByte . showPC <$> cpuPC <$> cpuState
+        -- output = showPC <$> cpuOutPC <$> cpuOut
+        -- (ihi, ilo) = unbundle $ splitByte . showPC <$> (cpuOutPC <$> cpuOut)
 
-    ss' = activeLow <$> ss
+        digits = ilo :> ihi :> olo :> ohi :> Nil
+        ss = driveSS 10000 (bundle digits)
 
-    noSegs = pure (repeat low)
+        ss' = activeLow <$> ss
+
+        noSegs = pure (repeat low)
 
 gate :: Bool -> a -> Maybe a
 gate False = const Nothing

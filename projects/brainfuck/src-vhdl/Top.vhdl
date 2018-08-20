@@ -44,8 +44,8 @@ begin
             SS_ANODES => SS_ANODES,
             SS_SEGS => SS_SEGS,
             SS_DP => SS_DP,
-            LED => LEDS(0 to 0),
+            LED => LEDS(0 to 1),
             TX => TX);
 
-  LEDS(1 to 7) <= (others => '0');
+  LEDS(2 to 7) <= (others => '0');
 end;

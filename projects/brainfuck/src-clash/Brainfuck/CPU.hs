@@ -1,9 +1,13 @@
 {-# LANGUAGE RecordWildCards, ViewPatterns #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, TupleSections #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 module Brainfuck.CPU where
 
 import Clash.Prelude
 import Cactus.Clash.Util
+
+import GHC.Generics (Generic, Generic1)
+import Control.DeepSeq
 
 import Control.Monad.State
 import Data.Word
@@ -31,6 +35,7 @@ data CPUIn = CPUIn
     , cpuInOutputAck :: Bool
     , cpuInInput :: Maybe Word8
     }
+    deriving (Generic, NFData, Show)
 
 data MicroState
     = WaitMem
@@ -39,6 +44,7 @@ data MicroState
     | WaitOutput
     | WaitInput
     | Halt
+    deriving (Generic, NFData, Show, Eq)
 
 data CPUState = CPUState
     { cpuPC :: PC
@@ -47,6 +53,7 @@ data CPUState = CPUState
     , cpuSP :: Index 16
     , cpuState :: MicroState
     }
+    deriving (Generic, NFData, Show)
 
 cpuState0 :: CPUState
 cpuState0 = CPUState
@@ -64,6 +71,7 @@ data CPUOut = CPUOut
     , cpuOutOutput :: Maybe Word8
     , cpuOutNeedInput :: Bool
     }
+    deriving (Generic, Show)
 
 {-# INLINE fetch #-}
 fetch :: CPUIn -> State CPUState (Maybe BF)
@@ -83,9 +91,10 @@ pop = do
     CPUState{..} <- get
     return $ cpuStack !! cpuSP
 
-stepCPU :: CPUIn -> State CPUState CPUOut
+stepCPU :: CPUIn -> State CPUState (CPUState, CPUOut)
 stepCPU cpuIn@CPUIn{..} = do
     s <- get
+    let s0 = s
     (cpuOutWrite, cpuOutOutput, cpuOutNeedInput) <-
         case cpuState s of
             WaitMem -> do
@@ -151,7 +160,7 @@ stepCPU cpuIn@CPUIn{..} = do
                         modify $ \s -> s{ cpuState = Halt }
                         return (Nothing, Nothing, False)
     CPUState{..} <- get
-    return CPUOut
+    return $ (s0,) $ CPUOut
         { cpuOutPC = cpuPC
         , cpuOutPtr = cpuPtr
         , ..
