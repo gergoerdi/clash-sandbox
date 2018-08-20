@@ -38,8 +38,7 @@ data CPUIn = CPUIn
     deriving (Generic, NFData, Show)
 
 data MicroState
-    = WaitMem
-    | Exec
+    = Exec
     | Skip (Unsigned 5)
     | WaitOutput
     | WaitInput
@@ -51,6 +50,7 @@ data CPUState = CPUState
     , cpuPtr :: Ptr
     , cpuStack :: Vec 16 PC
     , cpuSP :: Index 16
+    , cpuWaitMem :: Bool
     , cpuState :: MicroState
     }
     deriving (Generic, NFData, Show)
@@ -61,7 +61,8 @@ cpuState0 = CPUState
     , cpuPtr = 0
     , cpuStack = repeat 0
     , cpuSP = 0
-    , cpuState = WaitMem
+    , cpuWaitMem = True
+    , cpuState = Exec
     }
 
 data CPUOut = CPUOut
@@ -76,7 +77,7 @@ data CPUOut = CPUOut
 {-# INLINE fetch #-}
 fetch :: CPUIn -> State CPUState (Maybe BF)
 fetch CPUIn{..} = do
-    modify $ \s -> s{ cpuPC = cpuPC s + 1}
+    modify $ \s -> s{ cpuPC = cpuPC s + 1, cpuWaitMem = True }
     return $ decode cpuInProg
 
 {-# INLINE push #-}
@@ -96,31 +97,32 @@ stepCPU cpuIn@CPUIn{..} = do
     s <- get
     let s0 = s
     (cpuOutWrite, cpuOutOutput, cpuOutNeedInput) <-
-        case cpuState s of
-            WaitMem -> do
-                modify $ \s -> s{ cpuState = Exec }
+        case (cpuWaitMem s, cpuState s) of
+            (True, st) -> do
+                modify $ \s -> s{ cpuWaitMem = False }
+                return (Nothing, Nothing, st == WaitInput)
+            (_, Halt) -> do
                 return (Nothing, Nothing, False)
-            Halt -> do
-                return (Nothing, Nothing, False)
-            Skip n -> do
+            (_, Skip n) -> do
                 fetch cpuIn >>= \case
-                    Just StartLoop -> modify $ \s ->
-                      s{ cpuState = Skip (n + 1)
-                       }
-                    Just EndLoop -> modify $ \s ->
-                      s{ cpuState = if n == 0 then Exec else Skip (n - 1)
-                       }
+                    Just StartLoop -> modify $ \s -> s
+                        { cpuState = Skip (n + 1) }
+                    Just EndLoop -> modify $ \s -> s
+                        { cpuState = if n == 0 then Exec else Skip (n - 1) }
                     _ -> return ()
                 return (Nothing, Nothing, False)
-            WaitOutput -> do
-                when cpuInOutputAck $ modify $ \s -> s{ cpuState = Exec }
+            (_, WaitOutput) -> do
+                when cpuInOutputAck $ modify $ \s -> s
+                    { cpuState = Exec
+                    , cpuWaitMem = True
+                    }
                 return (Nothing, Just cpuInRead, False)
-            WaitInput -> case cpuInInput of
+            (_, WaitInput) -> case cpuInInput of
                 Nothing -> return (Nothing, Nothing, True)
                 Just input -> do
-                    modify $ \s -> s{ cpuState = Exec }
+                    modify $ \s -> s{ cpuWaitMem = True, cpuState = Exec }
                     return (Just input, Nothing, False)
-            Exec -> do
+            (_, Exec) -> do
                 fetch cpuIn >>= \case
                     Nothing -> do
                         return (Nothing, Nothing, False)
@@ -131,13 +133,11 @@ stepCPU cpuIn@CPUIn{..} = do
                         modify $ \s -> s{ cpuPtr = cpuPtr s - 1 }
                         return (Nothing, Nothing, False)
                     Just IncCell -> do
-                        modify $ \s -> s{ cpuState = WaitMem }
                         return (Just (cpuInRead + 1), Nothing, False)
                     Just DecCell -> do
-                        modify $ \s -> s{ cpuState = WaitMem }
                         return (Just (cpuInRead - 1), Nothing, False)
                     Just Output -> do
-                        modify $ \s -> s{ cpuState = WaitOutput }
+                        modify $ \s -> s{ cpuState = WaitOutput, cpuWaitMem = False }
                         return (Nothing, Just cpuInRead, False)
                     Just Input -> do
                         modify $ \s -> s{ cpuState = WaitInput }
