@@ -47,7 +47,7 @@ board btn0 = ((anodes, segments, dp), singleton <$> led)
 
     (_, btn) = debounce d16 $ bitToBool . complement <$> btn0
 
-    cnt = countWhen btn
+    cnt = countWhen . rising $ btn
     digits = reverse . unpack . pack <$> cnt
     ss = driveSS 10000 digits
     ss' = activeLow <$> ss

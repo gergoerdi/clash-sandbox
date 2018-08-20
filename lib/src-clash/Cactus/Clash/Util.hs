@@ -12,6 +12,7 @@ module Cactus.Clash.Util
     , succIdx
     , predIdx
     , debounce
+    , rising
     ) where
 
 import Clash.Prelude
@@ -42,10 +43,17 @@ activeHigh = fmap boolToBit
 countWhen
     :: (HiddenClockReset domain gated synchronous)
     => Signal domain Bool -> Signal domain Word16
-countWhen = moore step fst (0, False)
+countWhen = moore step id 0
   where
-    step (n, held) False = (n, False)
-    step (n, held) True = (if held then n else succ n, True)
+    step n b = if b then succ n else n
+
+rising
+    :: (HiddenClockReset domain gated synchronous)
+    => Signal domain Bool -> Signal domain Bool
+rising = mealy step False
+  where
+    step False True = (True, True)
+    step s b = (b, False)
 
 countTo
     :: (HiddenClockReset domain gated synchronous)
