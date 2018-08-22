@@ -24,7 +24,7 @@ import Data.Monoid
 data RXState = RXState
     { buf1, buf2 :: Bit
     , cnt :: Word16
-    , byte :: Vec 8 Bit
+    , byte :: Word8
     , state :: MicroState
     }
     deriving (Generic, NFData, Show)
@@ -37,8 +37,8 @@ data MicroState
     | RXCleanup
     deriving (Generic, NFData, Show)
 
-rotateLeftS' :: forall a d. (BitPack a, KnownNat (BitSize a)) => SNat d -> a -> a
-rotateLeftS' d x = unpack . pack $ rotateLeftS (unpack . pack $ x :: Vec (BitSize a) Bit) d
+shiftInLeft :: (BitPack a, KnownNat (BitSize a)) => Bit -> a -> a
+shiftInLeft b bs = unpack . pack . fst $ shiftInAt0 (unpack . pack $ bs) (b :> Nil)
 
 rx0 :: Word16 -> Bit -> State RXState (Maybe Word8)
 rx0 divider bit = do
@@ -49,12 +49,12 @@ rx0 divider bit = do
         RXIdle -> do
             when (buf2 == low) $ goto RXStart
         RXStart -> when (cnt == divider `div` 2) $ do
-            goto $ if buf2 == low then RXBit maxBound else RXIdle
+            goto $ if buf2 == low then RXBit 0 else RXIdle
         RXBit i -> when (cnt == 0) $ do
-            modify $ \s -> s{ byte = replace i buf2 byte }
-            goto $ maybe RXStop RXBit $ predIdx i
+            modify $ \s -> s{ byte = shiftInLeft buf2 byte }
+            goto $ maybe RXStop RXBit $ succIdx i
         RXStop -> when (cnt == 0) $ do
-            tell $ Last . Just . unpack . pack $ byte
+            tell $ Last . Just $ byte
             goto RXCleanup
         RXCleanup -> goto RXIdle
   where
@@ -72,6 +72,6 @@ rx clkRate serialRate = mealyState (rx0 $ fromIntegral $ clkRate `div` serialRat
         { buf1 = 0
         , buf2 = 0
         , cnt = 0
-        , byte = pure 0
+        , byte = 0
         , state = RXIdle
         }
