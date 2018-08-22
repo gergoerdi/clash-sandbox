@@ -19,9 +19,7 @@ computer romFile input outputAck = (output, needInput, cpuState)
     cpuIn = CPUIn <$> romOut <*> ramOut <*> outputAck <*> input
 
     romOut = unpack <$> blockRamFile d1024 romFile (cpuOutPC <$> cpuOut) (pure Nothing)
-
-    packWrite CPUOut{..} = (cpuOutPtr,) <$> cpuOutWrite
-    ramOut = blockRam (replicate d1024 0) (cpuOutPtr <$> cpuOut) (packWrite <$> cpuOut)
+    ramOut = blockRam (replicate d1024 0) (cpuOutPtr <$> cpuOut) (cpuOutWrite <$> cpuOut)
 
     output = cpuOutOutput <$> cpuOut
     needInput = cpuOutNeedInput <$> cpuOut

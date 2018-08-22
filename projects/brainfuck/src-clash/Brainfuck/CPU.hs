@@ -9,11 +9,15 @@ import Cactus.Clash.Util
 import GHC.Generics (Generic, Generic1)
 import Control.DeepSeq
 
+import Control.Monad.Trans.Class as T
 import Control.Monad.State
+import Control.Monad.Trans.Cont
+import Control.Monad.Trans.Writer
 import Data.Word
 import Data.Bits
 import Data.Char (chr)
 import Data.Maybe (fromMaybe)
+import Data.Monoid
 
 data BF
     = IncPtr
@@ -68,104 +72,118 @@ cpuState0 = CPUState
 data CPUOut = CPUOut
     { cpuOutPC :: PC
     , cpuOutPtr :: Ptr
-    , cpuOutWrite :: Maybe Word8
+    , cpuOutWrite :: Maybe (Ptr, Word8)
     , cpuOutOutput :: Maybe Word8
     , cpuOutNeedInput :: Bool
     }
     deriving (Generic, Show)
 
-{-# INLINE fetch #-}
-fetch :: CPUIn -> State CPUState (Maybe BF)
-fetch CPUIn{..} = do
-    modify $ \s -> s{ cpuPC = cpuPC s + 1, cpuWaitMem = True }
-    return $ decode cpuInProg
-
 {-# INLINE push #-}
-push :: PC -> State CPUState ()
+push :: (MonadState CPUState m) => PC -> m ()
 push pc = do
     modify $ \s@CPUState{..} -> s{ cpuSP = nextIdx cpuSP, cpuStack = replace cpuSP pc cpuStack }
 
 {-# INLINE pop #-}
-pop :: State CPUState PC
+pop :: (MonadState CPUState m) => m PC
 pop = do
     modify $ \s@CPUState{..} -> s{ cpuSP = prevIdx cpuSP }
     CPUState{..} <- get
     return $ cpuStack !! cpuSP
 
-stepCPU :: CPUIn -> State CPUState (CPUState, CPUOut)
-stepCPU cpuIn@CPUIn{..} = do
+data W = W{ wOutput :: Last Word8
+          , wWrite :: Last (Ptr, Word8)
+          -- , wInput :: Any
+          }
+instance Semigroup W where
+    W o1 w1 <> W o2 w2 = W (o1 <> o2) (w1 <> w2)
+
+instance Monoid W where
+    mempty = W mempty mempty
+
+cpuOut :: CPUState -> W -> CPUOut
+cpuOut CPUState{..} W{..} = CPUOut
+    { cpuOutPC = cpuPC
+    , cpuOutPtr = cpuPtr
+    , cpuOutWrite = getLast wWrite
+    , cpuOutOutput = getLast wOutput
+    , cpuOutNeedInput = cpuState == WaitInput
+    }
+
+type CPU r = ContT r (WriterT W (State CPUState))
+
+stepCPU' :: CPUIn -> CPU () ()
+stepCPU' cpuIn@CPUIn{..} = resetT $ do
+    wait
     s <- get
-    let s0 = s
-    (cpuOutWrite, cpuOutOutput, cpuOutNeedInput) <-
-        case (cpuWaitMem s, cpuState s) of
-            (True, st) -> do
-                modify $ \s -> s{ cpuWaitMem = False }
-                return (Nothing, Nothing, st == WaitInput)
-            (_, Halt) -> do
-                return (Nothing, Nothing, False)
-            (_, Skip n) -> do
-                fetch cpuIn >>= \case
-                    Just StartLoop -> modify $ \s -> s
-                        { cpuState = Skip (n + 1) }
-                    Just EndLoop -> modify $ \s -> s
-                        { cpuState = if n == 0 then Exec else Skip (n - 1) }
-                    _ -> return ()
-                return (Nothing, Nothing, False)
-            (_, WaitOutput) -> do
-                when cpuInOutputAck $ modify $ \s -> s
-                    { cpuState = Exec
-                    , cpuWaitMem = True
-                    }
-                return (Nothing, Just cpuInRead, False)
-            (_, WaitInput) -> case cpuInInput of
-                Nothing -> return (Nothing, Nothing, True)
-                Just input -> do
-                    modify $ \s -> s{ cpuWaitMem = True, cpuState = Exec }
-                    return (Just input, Nothing, False)
-            (_, Exec) -> do
-                fetch cpuIn >>= \case
-                    Nothing -> do
-                        return (Nothing, Nothing, False)
-                    Just IncPtr -> do
-                        modify $ \s -> s{ cpuPtr = cpuPtr s + 1 }
-                        return (Nothing, Nothing, False)
-                    Just DecPtr -> do
-                        modify $ \s -> s{ cpuPtr = cpuPtr s - 1 }
-                        return (Nothing, Nothing, False)
-                    Just IncCell -> do
-                        return (Just (cpuInRead + 1), Nothing, False)
-                    Just DecCell -> do
-                        return (Just (cpuInRead - 1), Nothing, False)
-                    Just Output -> do
-                        modify $ \s -> s{ cpuState = WaitOutput, cpuWaitMem = False }
-                        return (Nothing, Just cpuInRead, False)
-                    Just Input -> do
-                        modify $ \s -> s{ cpuState = WaitInput }
-                        return (Nothing, Nothing, True)
-                    Just StartLoop
-                      | cpuInRead == 0 -> do
-                        modify $ \s -> s{ cpuState = Skip 0 }
-                        return (Nothing, Nothing, False)
-                      | otherwise -> do
-                        push $ cpuPC s
-                        return (Nothing, Nothing, False)
-                    Just EndLoop
-                      | cpuInRead == 0 -> do
-                        pop
-                        return (Nothing, Nothing, False)
-                      | otherwise -> do
-                        pc <- pop
-                        modify $ \s -> s{ cpuPC = pc }
-                        return (Nothing, Nothing, False)
-                    Just NULL -> do
-                        modify $ \s -> s{ cpuState = Halt }
-                        return (Nothing, Nothing, False)
-    CPUState{..} <- get
-    return $ (s0,) $ CPUOut
-        { cpuOutPC = cpuPC
-        , cpuOutPtr = cpuPtr
-        , ..
-        }
+    case cpuState s of
+        Halt -> return ()
+        Skip n -> do
+            fetch cpuIn >>= \op -> case op of
+                StartLoop -> goto $ Skip $ n + 1
+                EndLoop -> goto $ if n == 0 then Exec else Skip (n - 1)
+                _ -> return ()
+        WaitOutput -> do
+            output cpuInRead
+            when cpuInOutputAck $ goto Exec
+        WaitInput -> case cpuInInput of
+            Nothing -> return ()
+            Just input -> do
+                goto Exec
+                write (cpuPtr s) input
+        Exec -> fetch cpuIn >>= \op -> case op of
+            IncPtr -> do
+                modifyPtr succ
+            DecPtr -> do
+                modifyPtr pred
+            IncCell -> do
+                write (cpuPtr s) (cpuInRead + 1)
+            DecCell -> do
+                write (cpuPtr s) (cpuInRead - 1)
+            Output -> do
+                output cpuInRead
+            Input -> do
+                goto WaitInput
+            StartLoop
+              | cpuInRead == 0 -> do
+                  goto $ Skip 0
+              | otherwise -> do
+                  push $ cpuPC s
+            EndLoop -> do
+                start <- pop
+                when (cpuInRead /= 0) $ jump start
+            NULL -> do
+                goto Halt
+  where
+    break = shiftT $ \k -> return ()
+
+    fetch CPUIn{..} = do
+        modify $ \s -> s{ cpuPC = cpuPC s + 1 }
+        maybe break return $ decode cpuInProg
+
+    goto st = modify $ \s -> s{ cpuState = st }
+    jump pc = modify $ \s -> s{ cpuPC = pc }
+    modifyPtr f = modify $ \s -> s{ cpuPtr = f $ cpuPtr s }
+
+    wait = do
+        waiting <- gets cpuWaitMem
+        when waiting $ do
+            modify $ \s -> s{ cpuWaitMem = False}
+            break
+
+    write addr x = do
+        modify $ \s -> s{ cpuWaitMem = True }
+        T.lift $ tell $ mempty{ wWrite = Last . Just $ (addr, x) }
+
+    output x = do
+        T.lift $ tell $ mempty{ wOutput = Last . Just $ x }
+        goto WaitOutput
+
+stepCPU :: CPUIn -> State CPUState (CPUState, CPUOut)
+stepCPU cpuIn = do
+    s0 <- get
+    w <- execWriterT . evalContT $ stepCPU' cpuIn
+    s <- get
+    return (s0, cpuOut s w)
 
 ascii :: Word8 -> Char
 ascii = chr . fromIntegral
