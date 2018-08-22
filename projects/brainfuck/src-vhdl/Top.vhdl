@@ -39,13 +39,14 @@ begin
   inst_Brainfuck : entity work.Brainfuck
   port map (CLK_32MHZ => CLK_32MHZ,
             RESET => RESET,
+            RX => RX,
             BUTTON => JOY_LEFT,
             SWITCHES => SWITCHES,
+            TX => TX,
             SS_ANODES => SS_ANODES,
             SS_SEGS => SS_SEGS,
             SS_DP => SS_DP,
-            LED => LEDS(0 to 1),
-            TX => TX);
+            LED => LEDS(0 to 1));
 
   LEDS(2 to 7) <= (others => '0');
 end;

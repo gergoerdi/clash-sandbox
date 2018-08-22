@@ -5,8 +5,10 @@ import Clash.Prelude
 import Cactus.Clash.Util
 import Cactus.Clash.SevenSegment
 import Cactus.Clash.SerialTX
+import Cactus.Clash.SerialRX
 import Data.Word
 import Data.Maybe (fromMaybe, isJust)
+import Control.Monad
 
 import Brainfuck.Computer
 
@@ -17,27 +19,29 @@ import Brainfuck.Computer
     , t_inputs =
           [ PortName "CLK_32MHZ"
           , PortName "RESET"
+          , PortName "RX"
           , PortName "SWITCHES"
           , PortName "BUTTON"
           ]
     , t_output = PortProduct ""
-          [ PortProduct "" [PortName "SS_ANODES", PortName "SS_SEGS", PortName "SS_DP"]
+          [ PortName "TX"
+          , PortProduct "" [PortName "SS_ANODES", PortName "SS_SEGS", PortName "SS_DP"]
           , PortName "LED"
-          , PortName "TX"
           ]
     }) #-}
 topEntity
     :: Clock System Source
     -> Reset System Asynchronous
+    -> Signal System Bit
     -> Signal System (Vec 8 Bit)
     -> Signal System Bit
-    -> ( (Signal System (Vec 4 Bit), Signal System (Vec 7 Bit), Signal System Bit)
+    -> ( Signal System Bit
+      , (Signal System (Vec 4 Bit), Signal System (Vec 7 Bit), Signal System Bit)
       , Signal System (Vec 2 Bit)
-      , Signal System Bit
       )
 topEntity = exposeClockReset board
   where
-    board switches btn0 = ((anodes, segments, dp), leds, txOut <$> serial)
+    board recv switches btn0 = (txOut <$> serialOut, (anodes, segments, dp), leds)
       where
         dim s = (.&&.) <$> (repeat <$> countTo 64) <*> s
         anodes = activeLow <$> dim (ssMask <$> ss)
@@ -50,11 +54,13 @@ topEntity = exposeClockReset board
         click = rising btn
 
         rawInput = unpack . v2bv <$> switches
-        input = gate <$> click <*> rawInput
         ackOutput = click .&&. fifoReady
+        input = mplus <$> (gate <$> click <*> rawInput) <*> serialIn
 
-        serial = tx clkRate serialRate output'
-        (output', fifoReady) = fifo (diff output) (txReady <$> serial)
+        serialIn = rx clkRate serialRate recv
+
+        serialOut = tx clkRate serialRate output'
+        (output', fifoReady) = fifo (diff output) (txReady <$> serialOut)
 
         (output, needInput, cpuState) = computer "prog.rom" input ackOutput
 
