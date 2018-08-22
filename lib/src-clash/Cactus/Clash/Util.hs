@@ -1,6 +1,5 @@
 module Cactus.Clash.Util
     ( mealyState
-    , mealyState'
     , activeLowReset
     , activeLow
     , activeHigh
@@ -13,23 +12,20 @@ module Cactus.Clash.Util
     , predIdx
     , debounce
     , rising
+    , diff
     ) where
 
 import Clash.Prelude
 import Control.Monad.State
 import Data.Word
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 
 mealyState :: (HiddenClockReset domain gated synchronous)
            => (i -> State s o) -> s -> (Signal domain i -> Signal domain o)
-mealyState f s = mealyState' f s (pure True)
-
-mealyState' :: (HiddenClockReset domain gated synchronous)
-            => (i -> State s o) -> s -> Signal domain Bool -> Signal domain i -> Signal domain o
-mealyState' f s = curry $ mealy step s . bundle
+mealyState f = mealy step
   where
-    step s (progress, x) = let (y, s') = runState (f x) s
-                           in (if progress then s' else s, y)
+    step s x = let (y, s') = runState (f x) s
+               in (s', y)
 
 activeLowReset :: Reset domain Asynchronous -> Reset domain Asynchronous
 activeLowReset = unsafeToAsyncReset . (not <$>) . unsafeFromAsyncReset
@@ -54,6 +50,14 @@ rising = mealy step False
   where
     step False True = (True, True)
     step s b = (b, False)
+
+diff
+    :: (HiddenClockReset domain gated synchronous)
+    => Signal domain (Maybe a) -> Signal domain (Maybe a)
+diff = mealy step False
+  where
+    step False new = (isJust new, new)
+    step True new = (isJust new, Nothing)
 
 countTo
     :: (HiddenClockReset domain gated synchronous)

@@ -37,21 +37,24 @@ topEntity
       )
 topEntity = exposeClockReset board
   where
-    board switches btn0 = ((anodes, segments, dp), leds, serialOut)
+    board switches btn0 = ((anodes, segments, dp), leds, txOut <$> serial)
       where
         dim s = (.&&.) <$> (repeat <$> countTo 64) <*> s
         anodes = activeLow <$> dim (ssMask <$> ss)
         segments = ssSegments <$> ss'
         dp = ssDP <$> ss'
-        serialOut = txOut <$> tx clkRate serialRate output
 
         leds = bundle $ activeHigh (isJust <$> output)  :> activeHigh needInput :> Nil
 
-        btn = rising . fmap (fromMaybe False) . debounce d16 . fmap (bitToBool . complement) $ btn0
+        btn = fmap (fromMaybe False) . debounce d16 . fmap (bitToBool . complement) $ btn0
+        click = rising btn
 
         rawInput = unpack . v2bv <$> switches
-        input = gate <$> btn <*> rawInput
-        ackOutput = btn
+        input = gate <$> click <*> rawInput
+        ackOutput = click .&&. fifoReady
+
+        serial = tx clkRate serialRate output'
+        (output', fifoReady) = fifo (diff output) (txReady <$> serial)
 
         (output, needInput, cpuState) = computer "prog.rom" input ackOutput
 
