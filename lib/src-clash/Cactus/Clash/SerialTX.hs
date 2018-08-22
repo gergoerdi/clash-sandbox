@@ -48,13 +48,6 @@ tx0 divider v = do
         (cnt, s0) <- get
         put $ if cnt == 0 then (divider, s) else (cnt - 1, s0)
 
-stepped :: Bool -> State s a -> State s a
-stepped allow act = do
-    s0 <- get
-    res <- act
-    unless allow $ put s0
-    return res
-
 tx
     :: (HiddenClockReset domain gated synchronous)
     => Word32
