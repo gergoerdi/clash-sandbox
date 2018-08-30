@@ -55,7 +55,7 @@ topEntity = exposeClockReset board
 
         rawInput = unpack . v2bv <$> switches
         ackOutput = click .&&. fifoReady
-        input = mplus <$> (gate <$> click <*> rawInput) <*> serialIn
+        input = mplus <$> (enable <$> click <*> rawInput) <*> serialIn
 
         serialIn = rx clkRate serialRate recv
 
@@ -76,10 +76,6 @@ topEntity = exposeClockReset board
         ss' = activeLow <$> ss
 
         noSegs = pure (repeat low)
-
-gate :: Bool -> a -> Maybe a
-gate False = const Nothing
-gate True = Just
 
 clkRate :: Word32
 clkRate = 32000000

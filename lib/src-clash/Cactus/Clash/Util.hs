@@ -13,6 +13,7 @@ module Cactus.Clash.Util
     , debounce
     , rising
     , diff
+    , enable
     ) where
 
 import Clash.Prelude
@@ -115,3 +116,7 @@ debounce n = mealyState step (0 :: Unsigned n, False)
         put (counter', button)
 
         return $ button <$ guard (not changing && stable)
+
+enable :: Bool -> a -> Maybe a
+enable False = const Nothing
+enable True = Just
