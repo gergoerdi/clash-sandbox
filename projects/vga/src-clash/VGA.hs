@@ -5,12 +5,11 @@ import Clash.Prelude
 import Cactus.Clash.Util
 import Cactus.Clash.SerialTX
 import Cactus.Clash.SerialRX
+import Cactus.Clash.VGA
 import Data.Word
 import Data.Maybe (fromMaybe, isJust)
 import Control.Monad (guard)
 import Data.Function
-
-import VGADriver
 
 {-# NOINLINE topEntity #-}
 {-# ANN topEntity

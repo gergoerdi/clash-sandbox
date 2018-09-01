@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module VGADriver where
+module Cactus.Clash.VGA where
 
 import Clash.Prelude
 import Cactus.Clash.Util
