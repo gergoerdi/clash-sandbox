@@ -40,16 +40,31 @@ topEntity = exposeClockReset board
     board rxIn = (pure low, activeLow led', (vgaVSync, vgaHSync, vgaR, vgaG, vgaB))
       where
         VGADriver{..} = vgaDriver vga640x480at60
-        -- led' = regEn False (vgaStartFrame .&&. ledcnt .==. 0) (not <$> led')
-        -- ledcnt = regEn (0 :: Word8) vgaStartFrame $ mux (ledcnt .==. 59) 0 (ledcnt + 1)
         led' = regEn False (countTo clkRate) $ not <$> led'
 
         vgaX' = (chipX =<<) <$> vgaX
         vgaY' = (chipY =<<) <$> vgaY
+        visible = isJust <$> vgaX' .&&. isJust <$> vgaY'
 
-        vgaR = maybe 0 truncateB <$> vgaX'
-        vgaG = maybe 0 truncateB <$> vgaY'
-        vgaB = pure 0
+        pixel = pixelAt <$> vgaX' <*> vgaY'
+          where
+            pixelAt (Just x) (Just y) = case (x, y) of
+                (0, 0) -> True
+                (1, 0) -> True
+                (2, 1) -> True
+
+                (61, 30) -> True
+                (62, 31) -> True
+                (63, 31) -> True
+                _ -> False
+            pixelAt _ _ = False
+
+        vgaR = monochrome <$> pixel
+        vgaG = monochrome <$> pixel
+        vgaB = monochrome <$> pixel
+
+monochrome :: (Bounded a) => Bool -> a
+monochrome b = if b then maxBound else minBound
 
 chipX :: Unsigned 10 -> Maybe (Unsigned 6)
 chipX x = let (x', _) = unpack . pack $ x :: (Unsigned 7, Unsigned 3)
