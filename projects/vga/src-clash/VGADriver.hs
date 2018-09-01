@@ -36,7 +36,7 @@ vgaDriver VGATimings{..} = VGADriver{..}
     vgaHSync = activeLow $ pure hSyncStart .<=. hCount .&&. hCount .<. pure hSyncEnd
     vgaStartLine = hCount .==. pure hSyncStart
     vgaStartFrame = vgaStartLine .&&. vCount .==. pure vSyncStart
-    vgaX = enable <$> (pure (hSyncEnd + hPost) .<. hCount) <*> (hCount - pure (hSyncEnd + hPost))
+    vgaX = enable <$> (hCount .<. pure hSize) <*> hCount
     vgaY = enable <$> (vCount .<. pure vSize) <*> vCount
 
     endLine = hCount .==. pure hMax
@@ -45,9 +45,9 @@ vgaDriver VGATimings{..} = VGADriver{..}
     vCount = regEn (0 :: Unsigned h) endLine $ mux endFrame 0 (vCount + 1)
 
     VGATiming hSize hPre hSync hPost = vgaHorizTiming
-    hSyncStart = 0
+    hSyncStart = hSize + hPre
     hSyncEnd = hSyncStart + hSync
-    hMax = sum [hSync, hPost, hSize, hPre] - 1
+    hMax = sum [hSize, hPre, hSync, hPost] - 1
 
     VGATiming vSize vPre vSync vPost = vgaVertTiming
     vSyncStart = vSize + vPre
