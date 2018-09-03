@@ -13,6 +13,8 @@ module Cactus.Clash.Util
     , debounce
     , diff
     , enable
+    , extremum
+    , regShiftIn
     ) where
 
 import Clash.Prelude
@@ -111,3 +113,19 @@ debounce n = mealyState step (0 :: Unsigned n, False)
 enable :: Bool -> a -> Maybe a
 enable False = const Nothing
 enable True = Just
+
+extremum :: (KnownNat n) => Vec n Bit -> Maybe Bit
+extremum xs
+  | xs == repeat low = Just low
+  | xs == repeat high = Just high
+  | otherwise = Nothing
+
+regShiftIn
+    :: (HiddenClockReset dom gated synchronous, KnownNat n)
+    => Vec n a -> Signal dom (Maybe a) -> (Signal dom (Vec n a), Signal dom (Maybe a))
+regShiftIn = mealyB $ \xs x -> let out@(xs', _) = shiftIn x xs in (xs', out)
+  where
+    shiftIn :: (KnownNat n) => Maybe a -> Vec n a -> (Vec n a, Maybe a)
+    shiftIn Nothing xs = (xs, Nothing)
+    shiftIn (Just x) xs = let (xs', x :> Nil) = shiftInAt0 xs (singleton x)
+                          in (xs', Just x)
