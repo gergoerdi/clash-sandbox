@@ -51,7 +51,7 @@ topEntity = exposeClockReset board
         leds = bundle $ activeHigh (isJust <$> output)  :> activeHigh needInput :> Nil
 
         btn = fmap (fromMaybe False) . debounce d16 . fmap (bitToBool . complement) $ btn0
-        click = rising btn
+        click = isRising maxBound btn
 
         rawInput = unpack . v2bv <$> switches
         ackOutput = click .&&. fifoReady

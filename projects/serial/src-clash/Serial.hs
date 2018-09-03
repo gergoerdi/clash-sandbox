@@ -44,7 +44,7 @@ topEntity = exposeClockReset board
         dp = ssDP <$> ss'
 
         btn = fmap (fromMaybe False) . debounce d16 . fmap (bitToBool . complement) $ btn0
-        click = rising btn
+        click = isRising maxBound btn
 
         rawOutput = unpack . v2bv <$> switches
         output = gate <$> click <*> rawOutput

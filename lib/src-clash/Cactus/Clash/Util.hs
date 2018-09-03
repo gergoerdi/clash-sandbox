@@ -11,7 +11,6 @@ module Cactus.Clash.Util
     , succIdx
     , predIdx
     , debounce
-    , rising
     , diff
     , enable
     ) where
@@ -43,14 +42,6 @@ countWhen
 countWhen = moore step id 0
   where
     step n b = if b then succ n else n
-
-rising
-    :: (HiddenClockReset domain gated synchronous)
-    => Signal domain Bool -> Signal domain Bool
-rising = mealy step False
-  where
-    step False True = (True, True)
-    step s b = (b, False)
 
 diff
     :: (HiddenClockReset domain gated synchronous)
