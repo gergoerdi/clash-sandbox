@@ -26,8 +26,8 @@ data VGADriver dom w h = VGADriver
     , vgaY :: Signal dom (Maybe (Unsigned h))
     }
 
-vgaDriver :: forall dom gated synchronous w h.
-    (HiddenClockReset dom gated synchronous, KnownNat w, KnownNat h)
+vgaDriver
+    :: (HiddenClockReset dom gated synchronous, KnownNat w, KnownNat h)
     => VGATimings w h
     -> VGADriver dom w h
 vgaDriver VGATimings{..} = VGADriver{..}
@@ -41,8 +41,8 @@ vgaDriver VGATimings{..} = VGADriver{..}
 
     endLine = hCount .==. pure hMax
     endFrame = vCount .==. pure vMax
-    hCount = register (0 :: Unsigned w) $ mux endLine 0 (hCount + 1)
-    vCount = regEn (0 :: Unsigned h) endLine $ mux endFrame 0 (vCount + 1)
+    hCount = register 0 $ mux endLine 0 (hCount + 1)
+    vCount = regEn 0 endLine $ mux endFrame 0 (vCount + 1)
 
     VGATiming hSize hPre hSync hPost = vgaHorizTiming
     hSyncStart = hSize + hPre
