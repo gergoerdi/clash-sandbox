@@ -92,23 +92,23 @@ predIdx :: (KnownNat n) => Index n -> Maybe (Index n)
 predIdx x | x == 0 = Nothing
           | otherwise = Just $ pred x
 
+unsigned :: (KnownNat n) => SNat n -> Unsigned n -> Unsigned n
+unsigned n = id
+
 debounce
-    :: forall domain gated synchronous n. (HiddenClockReset domain gated synchronous, KnownNat n)
-    => SNat n -> Signal domain Bool -> (Signal domain (Maybe Bool))
-debounce n = mealyState step (0 :: Unsigned n, False)
+    :: (HiddenClockReset domain gated synchronous, KnownNat n, Eq a)
+    => SNat n -> a -> Signal domain a -> Signal domain a
+debounce n x0 = mealyState step (unsigned n 0, x0, x0)
   where
-    step button = do
-        (counter, prev) <- get
+    step this = do
+        (counter, last, prev) <- get
         let stable = counter == maxBound
-            changing = prev /= button
+            changing = this /= prev
+            counter' = if changing then 0 else counter `boundedPlus` 1
+            last' = if counter' == maxBound then this else last
 
-        let counter'
-              | changing  = 0
-              | stable    = maxBound
-              | otherwise = counter + 1
-        put (counter', button)
-
-        return $ button <$ guard (not changing && stable)
+        put (counter', last', this)
+        return last'
 
 enable :: Bool -> a -> Maybe a
 enable False = const Nothing

@@ -45,7 +45,7 @@ board btn0 = ((anodes, segments, dp), singleton <$> led)
     dp = ssDP <$> ss'
     led = activeHigh btn
 
-    btn = fmap (fromMaybe False) . debounce d16 $ bitToBool . complement <$> btn0
+    btn = debounce d16 False $ bitToBool . complement <$> btn0
 
     cnt = countWhen . isRising maxBound $ btn
     digits = reverse . unpack . pack <$> cnt
