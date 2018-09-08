@@ -41,7 +41,7 @@ topEntity
       )
 topEntity = exposeClockReset board
   where
-    board recv switches btn0 = (txOut <$> serialOut, (anodes, segments, dp), leds)
+    board recv switches btn0 = (txOut, (anodes, segments, dp), leds)
       where
         dim s = (.&&.) <$> (repeat <$> countTo 64) <*> s
         anodes = activeLow <$> dim (ssMask <$> ss)
@@ -59,8 +59,8 @@ topEntity = exposeClockReset board
 
         serialIn = rx clkRate serialRate recv
 
-        serialOut = tx clkRate serialRate output'
-        (output', fifoReady) = fifo (diff output) (txReady <$> serialOut)
+        TXOut{..} = tx clkRate serialRate output'
+        (output', fifoReady) = fifo (diff output) txReady
 
         (output, needInput, cpuState) = computer "prog.rom" input ackOutput
 

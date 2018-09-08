@@ -20,19 +20,19 @@ data TXState = TXIdle
              | TXStart
              | TXBit (Index 8)
 
-data TXOut = TXOut{ txReady :: Bool, txOut :: Bit }
+data TXOut dom = TXOut{ txReady :: Signal dom Bool, txOut :: Signal dom Bit }
 
 rotateRightS' :: forall a d. (BitPack a, KnownNat (BitSize a)) => SNat d -> a -> a
 rotateRightS' d x = unpack . pack $ rotateRightS (unpack . pack $ x :: Vec (BitSize a) Bit) d
 
-tx0 :: Word32 -> Maybe Word8 -> State (Word32, Maybe (Word8, TXState)) TXOut
+tx0 :: Word32 -> Maybe Word8 -> State (Word32, Maybe (Word8, TXState)) (Bool, Bit)
 tx0 divider v = do
     (cnt, s) <- get
     case s of
         Nothing -> do
             traverse (\v -> put (divider, Just (v, TXIdle))) v
-            return $ TXOut True high
-        Just (v, s') -> TXOut False <$> case s' of
+            return (True, high)
+        Just (v, s') -> (False,) <$> case s' of
             TXIdle -> do
                 nextState $ Just (v, TXStart)
                 return high
@@ -53,8 +53,10 @@ tx
     => Word32
     -> Word32
     -> Signal domain (Maybe Word8)
-    -> Signal domain TXOut
-tx clkRate serialRate = mealyState (tx0 $ clkRate `div` serialRate) (0, Nothing)
+    -> TXOut domain
+tx clkRate serialRate inp = TXOut{..}
+  where
+    (txReady, txOut) = unbundle $ mealyState (tx0 $ clkRate `div` serialRate) (0, Nothing) inp
 
 fifo
     :: forall domain gated synchronous a. (HiddenClockReset domain gated synchronous)

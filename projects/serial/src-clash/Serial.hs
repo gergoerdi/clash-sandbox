@@ -36,7 +36,7 @@ topEntity
       )
 topEntity = exposeClockReset board
   where
-    board rxIn switches btn0 = (txOut <$> serialTX, (anodes, segments, dp))
+    board rxIn switches btn0 = (txOut, (anodes, segments, dp))
       where
         dim s = (.&&.) <$> (repeat <$> countTo 64) <*> s
         anodes = activeLow <$> dim (ssMask <$> ss)
@@ -49,8 +49,8 @@ topEntity = exposeClockReset board
         rawOutput = unpack . v2bv <$> switches
         output = gate <$> click <*> rawOutput
 
-        serialTX = tx clkRate serialRate output'
-        (output', fifoReady) = fifo (diff output) (txReady <$> serialTX)
+        TXOut{..} = tx clkRate serialRate output'
+        (output', fifoReady) = fifo (diff output) txReady
 
         input = regMaybe 0 $ rx clkRate serialRate rxIn
         -- input = pure 0
