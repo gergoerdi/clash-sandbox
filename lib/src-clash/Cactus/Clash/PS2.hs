@@ -1,5 +1,13 @@
 {-# LANGUAGE RecordWildCards #-}
-module Cactus.Clash.PS2 (PS2(..), samplePS2, decodePS2) where
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+module Cactus.Clash.PS2
+    ( PS2(..)
+    , samplePS2
+    , decodePS2
+    , KeyEvent(..)
+    , ScanCode(..)
+    , parseScanCode
+    ) where
 
 import Clash.Prelude
 import Cactus.Clash.Util
@@ -7,6 +15,8 @@ import Data.Word
 import Control.Monad.State
 import Control.Monad.Trans.Writer
 import Data.Monoid
+import GHC.Generics (Generic, Generic1)
+import Control.DeepSeq
 
 data PS2 dom = PS2
     { ps2Clk :: Signal dom Bit
@@ -45,3 +55,37 @@ decodePS2 = flip mealyState Idle $ \bit -> fmap getLast . execWriterT . forM_ bi
         Stop x -> do
             when (bit == high) $ tell $ Last x
             put Idle
+
+data KeyEvent = KeyPress | KeyRelease
+    deriving (Generic, NFData, Eq, Show)
+
+data ScanCode = ScanCode KeyEvent Word16
+    deriving (Generic, NFData, Eq, Show)
+
+data ScanState
+    = Init
+    | Extended Word8
+    | Code KeyEvent Word8
+
+-- TODO: rewrite this for clarity.
+-- All it does is it parses 0xE0 0xXX into an extended (16-bit) code, and everything else into
+-- an 8-bit code. The only complication is that the key release marker 0xF0 is always the
+-- second-to-last byte. Who does that?!?
+parseScanCode
+    :: (HiddenClockReset dom gated synchronous)
+    => Signal dom (Maybe Word8) -> Signal dom (Maybe ScanCode)
+parseScanCode = flip mealyState Init $ \raw -> fmap getLast . execWriterT . forM_ raw $ \raw -> do
+    let finish ev ext = do
+            tell $ Last . Just $ ScanCode ev $ fromBytes (ext, raw)
+            put Init
+    state <- get
+    case state of
+        Init | raw == 0xe0 -> put $ Extended raw
+             | raw == 0xf0 -> put $ Code KeyRelease 0x00
+             | otherwise -> finish KeyPress 0x00
+        Extended ext | raw == 0xf0 -> put $ Code KeyRelease ext
+                     | otherwise -> finish KeyPress ext
+        Code ev ext -> finish ev ext
+  where
+    fromBytes :: (Word8, Word8) -> Word16
+    fromBytes = unpack . pack
