@@ -3,6 +3,7 @@ module VGA where
 
 import Clash.Prelude
 import Cactus.Clash.Util
+import Cactus.Clash.Clock
 import Cactus.Clash.SerialTX
 import Cactus.Clash.SerialRX
 import Cactus.Clash.VGA
@@ -10,6 +11,9 @@ import Data.Word
 import Data.Maybe (fromMaybe, isJust)
 import Control.Monad (guard)
 import Data.Function
+
+-- 25.175 MHz clock, needed for the VGA mode we use
+type Dom25 = Dom "CLK_25MHZ" 39721
 
 {-# NOINLINE topEntity #-}
 {-# ANN topEntity
@@ -27,19 +31,19 @@ import Data.Function
           ]
     }) #-}
 topEntity
-    :: Clock System Source
-    -> Reset System Asynchronous
-    -> Signal System Bit
-    -> ( Signal System Bit
-      , Signal System Bit
-      , (Signal System Bit, Signal System Bit, Signal System (Unsigned 3), Signal System (Unsigned 3), Signal System (Unsigned 2))
+    :: Clock Dom25 Source
+    -> Reset Dom25 Asynchronous
+    -> Signal Dom25 Bit
+    -> ( Signal Dom25 Bit
+      , Signal Dom25 Bit
+      , (Signal Dom25 Bit, Signal Dom25 Bit, Signal Dom25 (Unsigned 3), Signal Dom25 (Unsigned 3), Signal Dom25 (Unsigned 2))
       )
 topEntity = exposeClockReset board
   where
     board rxIn = (pure low, activeLow led', (vgaVSync, vgaHSync, vgaR, vgaG, vgaB))
       where
         VGADriver{..} = vgaDriver vga640x480at60
-        led' = regEn False (countTo clkRate) $ not <$> led'
+        led' = regEn False (countTo $ fromIntegral clkRate) $ not <$> led'
 
         vgaX' = (chipX =<<) <$> vgaX
         vgaY' = (chipY =<<) <$> vgaY
@@ -72,9 +76,6 @@ chipX x = let (x', _) = unpack . pack $ x :: (Unsigned 7, Unsigned 3)
 chipY :: Unsigned 10 -> Maybe (Unsigned 5)
 chipY y = let (y', _) = unpack . pack $ y :: (Unsigned 7, Unsigned 3)
           in enable (14 <= y' && y' < 14 + 32) (truncateB $ y' - 14)
-
-clkRate :: Word32
-clkRate = 25175000
 
 serialRate :: Word32
 serialRate = 9600
