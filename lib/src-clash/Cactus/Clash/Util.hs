@@ -15,12 +15,15 @@ module Cactus.Clash.Util
     , enable
     , extremum
     , regShiftIn
+    , shiftInLeft
+    , parity
     ) where
 
 import Clash.Prelude
 import Control.Monad.State
 import Data.Word
 import Data.Maybe (fromMaybe, isJust)
+import qualified Data.List as L
 
 mealyState :: (HiddenClockReset domain gated synchronous)
            => (i -> State s o) -> s -> (Signal domain i -> Signal domain o)
@@ -95,6 +98,9 @@ predIdx x | x == 0 = Nothing
 unsigned :: (KnownNat n) => SNat n -> Unsigned n -> Unsigned n
 unsigned n = id
 
+shiftInLeft :: (BitPack a, KnownNat (BitSize a)) => Bit -> a -> a
+shiftInLeft b bs = unpack . pack . fst $ shiftInAt0 (unpack . pack $ bs) (b :> Nil)
+
 debounce
     :: (HiddenClockReset domain gated synchronous, KnownNat n, Eq a)
     => SNat n -> a -> Signal domain a -> Signal domain a
@@ -129,3 +135,8 @@ regShiftIn = mealyB $ \xs x -> let out@(xs', _) = shiftIn x xs in (xs', out)
     shiftIn Nothing xs = (xs, Nothing)
     shiftIn (Just x) xs = let (xs', x :> Nil) = shiftInAt0 xs (singleton x)
                           in (xs', Just x)
+
+parity :: (FiniteBits a) => a -> Bool
+parity x = L.foldr xor False [ testBit x i | i <- [0..n-1] ]
+  where
+    n = finiteBitSize x

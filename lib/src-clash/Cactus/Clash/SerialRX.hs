@@ -37,9 +37,6 @@ data MicroState
     | RXCleanup
     deriving (Generic, NFData, Show)
 
-shiftInLeft :: (BitPack a, KnownNat (BitSize a)) => Bit -> a -> a
-shiftInLeft b bs = unpack . pack . fst $ shiftInAt0 (unpack . pack $ bs) (b :> Nil)
-
 rx0 :: Word16 -> Bit -> State RXState (Maybe Word8)
 rx0 divider bit = do
     s@RXState{..} <- get
