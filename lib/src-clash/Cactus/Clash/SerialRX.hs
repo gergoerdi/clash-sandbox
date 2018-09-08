@@ -8,6 +8,7 @@ module Cactus.Clash.SerialRX
 
 import Clash.Prelude
 import Cactus.Clash.Util
+import Cactus.Clash.Clock
 
 import GHC.Generics (Generic, Generic1)
 import Control.DeepSeq
@@ -23,7 +24,7 @@ import Data.Monoid
 
 data RXState = RXState
     { buf1, buf2 :: Bit
-    , cnt :: Word16
+    , cnt :: Word32
     , byte :: Word8
     , state :: MicroState
     }
@@ -37,7 +38,7 @@ data MicroState
     | RXCleanup
     deriving (Generic, NFData, Show)
 
-rx0 :: Word16 -> Bit -> State RXState (Maybe Word8)
+rx0 :: Word32 -> Bit -> State RXState (Maybe Word8)
 rx0 divider bit = do
     s@RXState{..} <- get
     modify $ \s -> s{ buf2 = buf1, buf1 = bit, cnt = cnt - 1 }
@@ -58,12 +59,11 @@ rx0 divider bit = do
     goto st = modify $ \s -> s{ cnt = divider, state = st }
 
 rx
-    :: (HiddenClockReset domain gated synchronous)
+    :: (HiddenClockReset domain gated synchronous, domain ~ Dom s ps, KnownNat ps)
     => Word32
-    -> Word32
     -> Signal domain Bit
     -> Signal domain (Maybe Word8)
-rx clkRate serialRate = mealyState (rx0 $ fromIntegral $ clkRate `div` serialRate) s0
+rx serialRate = mealyState (rx0 $ fromIntegral clkRate `div` serialRate) s0
   where
     s0 = RXState
         { buf1 = 0

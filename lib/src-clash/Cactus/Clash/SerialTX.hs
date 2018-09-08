@@ -8,6 +8,7 @@ module Cactus.Clash.SerialTX
 
 import Clash.Prelude
 import Cactus.Clash.Util
+import Cactus.Clash.Clock
 
 import Control.Category ((>>>))
 import Control.Monad.State
@@ -49,14 +50,13 @@ tx0 divider v = do
         put $ if cnt == 0 then (divider, s) else (cnt - 1, s0)
 
 tx
-    :: (HiddenClockReset domain gated synchronous)
+    :: (HiddenClockReset domain gated synchronous, domain ~ Dom s ps, KnownNat ps)
     => Word32
-    -> Word32
     -> Signal domain (Maybe Word8)
     -> TXOut domain
-tx clkRate serialRate inp = TXOut{..}
+tx serialRate inp = TXOut{..}
   where
-    (txReady, txOut) = unbundle $ mealyState (tx0 $ clkRate `div` serialRate) (0, Nothing) inp
+    (txReady, txOut) = unbundle $ mealyState (tx0 $ fromIntegral clkRate `div` serialRate) (0, Nothing) inp
 
 fifo
     :: forall domain gated synchronous a. (HiddenClockReset domain gated synchronous)

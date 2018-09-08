@@ -12,6 +12,8 @@ import Control.Monad
 
 import Brainfuck.Computer
 
+type Dom32 = Dom "CLK_32MHZ" 31250
+
 {-# NOINLINE topEntity #-}
 {-# ANN topEntity
   (Synthesize
@@ -30,14 +32,14 @@ import Brainfuck.Computer
           ]
     }) #-}
 topEntity
-    :: Clock System Source
-    -> Reset System Asynchronous
-    -> Signal System Bit
-    -> Signal System (Vec 8 Bit)
-    -> Signal System Bit
-    -> ( Signal System Bit
-      , (Signal System (Vec 4 Bit), Signal System (Vec 7 Bit), Signal System Bit)
-      , Signal System (Vec 2 Bit)
+    :: Clock Dom32 Source
+    -> Reset Dom32 Asynchronous
+    -> Signal Dom32 Bit
+    -> Signal Dom32 (Vec 8 Bit)
+    -> Signal Dom32 Bit
+    -> ( Signal Dom32 Bit
+      , (Signal Dom32 (Vec 4 Bit), Signal Dom32 (Vec 7 Bit), Signal Dom32 Bit)
+      , Signal Dom32 (Vec 2 Bit)
       )
 topEntity = exposeClockReset board
   where
@@ -57,9 +59,9 @@ topEntity = exposeClockReset board
         ackOutput = click .&&. fifoReady
         input = mplus <$> (enable <$> click <*> rawInput) <*> serialIn
 
-        serialIn = rx clkRate serialRate recv
+        serialIn = rx serialRate recv
 
-        TXOut{..} = tx clkRate serialRate output'
+        TXOut{..} = tx serialRate output'
         (output', fifoReady) = fifo (diff output) txReady
 
         (output, needInput, cpuState) = computer "prog.rom" input ackOutput
@@ -76,9 +78,6 @@ topEntity = exposeClockReset board
         ss' = activeLow <$> ss
 
         noSegs = pure (repeat low)
-
-clkRate :: Word32
-clkRate = 32000000
 
 serialRate :: Word32
 serialRate = 9600

@@ -1,13 +1,17 @@
 {-# LANGUAGE RecordWildCards, TupleSections #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 module Serial where
 
-import Clash.Prelude
+import Clash.Prelude hiding (clkPeriod)
 import Cactus.Clash.Util
 import Cactus.Clash.SevenSegment
 import Cactus.Clash.SerialTX
 import Cactus.Clash.SerialRX
 import Data.Word
 import Data.Maybe (fromMaybe, isJust)
+import Data.Proxy
+
+type Dom32 = Dom "CLK_32MHZ" 31250
 
 {-# NOINLINE topEntity #-}
 {-# ANN topEntity
@@ -26,13 +30,13 @@ import Data.Maybe (fromMaybe, isJust)
           ]
     }) #-}
 topEntity
-    :: Clock System Source
-    -> Reset System Asynchronous
-    -> Signal System Bit
-    -> Signal System (Vec 8 Bit)
-    -> Signal System Bit
-    -> ( Signal System Bit
-      , (Signal System (Vec 4 Bit), Signal System (Vec 7 Bit), Signal System Bit)
+    :: Clock Dom32 Source
+    -> Reset _ Asynchronous
+    -> Signal _ Bit
+    -> Signal _ (Vec 8 Bit)
+    -> Signal _ Bit
+    -> ( Signal _ Bit
+      , (Signal _ (Vec 4 Bit), Signal _ (Vec 7 Bit), Signal _ Bit)
       )
 topEntity = exposeClockReset board
   where
@@ -49,10 +53,10 @@ topEntity = exposeClockReset board
         rawOutput = unpack . v2bv <$> switches
         output = gate <$> click <*> rawOutput
 
-        TXOut{..} = tx clkRate serialRate output'
+        TXOut{..} = tx serialRate output'
         (output', fifoReady) = fifo (diff output) txReady
 
-        input = regMaybe 0 $ rx clkRate serialRate rxIn
+        input = regMaybe 0 $ rx serialRate rxIn
         -- input = pure 0
 
         (ihi, ilo) = unbundle $ splitByte <$> input
@@ -71,9 +75,6 @@ topEntity = exposeClockReset board
 gate :: Bool -> a -> Maybe a
 gate False = const Nothing
 gate True = Just
-
-clkRate :: Word32
-clkRate = 32000000
 
 serialRate :: Word32
 serialRate = 9600
