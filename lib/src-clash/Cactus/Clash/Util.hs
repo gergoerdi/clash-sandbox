@@ -136,7 +136,7 @@ regShiftIn = mealyB $ \xs x -> let out@(xs', _) = shiftIn x xs in (xs', out)
     shiftIn (Just x) xs = let (xs', x :> Nil) = shiftInAt0 xs (singleton x)
                           in (xs', Just x)
 
-parity :: (FiniteBits a) => a -> Bool
-parity x = L.foldr xor False [ testBit x i | i <- [0..n-1] ]
+parity :: (FiniteBits a) => a -> Bit
+parity x = L.foldr xor low [ boolToBit $ testBit x i | i <- [0..n-1] ]
   where
     n = finiteBitSize x

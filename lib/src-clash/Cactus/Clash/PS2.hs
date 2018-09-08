@@ -50,7 +50,7 @@ decodePS2 = flip mealyState Idle $ \bit -> fmap getLast . execWriterT . forM_ bi
             let x' = shiftInLeft bit x
             put $ maybe (Parity x') (Bit x') $ succIdx i
         Parity x -> do
-            let checked = bitToBool bit `xor` parity x
+            let checked = bit /= parity x
             put $ Stop $ enable checked x
         Stop x -> do
             when (bit == high) $ tell $ Last x
