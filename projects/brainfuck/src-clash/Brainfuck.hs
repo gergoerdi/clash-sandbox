@@ -12,7 +12,7 @@ import Control.Monad
 
 import Brainfuck.Computer
 
-type Dom32 = Dom "CLK_32MHZ" 31250
+type Dom32 = Dom "CLK_32MHZ" (FromHz 32000000)
 
 {-# NOINLINE topEntity #-}
 {-# ANN topEntity

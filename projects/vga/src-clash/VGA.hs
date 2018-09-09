@@ -13,7 +13,7 @@ import Control.Monad (guard)
 import Data.Function
 
 -- 25.175 MHz clock, needed for the VGA mode we use
-type Dom25 = Dom "CLK_25MHZ" 39721
+type Dom25 = Dom "CLK_25MHZ" (FromHz 25175000)
 
 {-# NOINLINE topEntity #-}
 {-# ANN topEntity

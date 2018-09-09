@@ -17,6 +17,7 @@ module Cactus.Clash.Util
     , regShiftIn
     , shiftInLeft
     , parity
+    , FromHz
     ) where
 
 import Clash.Prelude
@@ -140,3 +141,5 @@ parity :: (FiniteBits a) => a -> Bit
 parity x = L.foldr xor low [ boolToBit $ testBit x i | i <- [0..n-1] ]
   where
     n = finiteBitSize x
+
+type FromHz rate = 1000000000000 `Div` rate

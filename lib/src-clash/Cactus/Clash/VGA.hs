@@ -28,7 +28,7 @@ data VGADriver dom w h = VGADriver
 
 vgaDriver
     :: (HiddenClockReset dom gated synchronous, KnownNat w, KnownNat h)
-    => (dom ~ Dom s ps, ps ~ (1000000000000 `Div` rate))
+    => (dom ~ Dom s ps, ps ~ FromHz rate)
     => VGATimings rate w h
     -> VGADriver dom w h
 vgaDriver VGATimings{..} = VGADriver{..}
