@@ -1,18 +1,17 @@
-{-# LANGUAGE RecordWildCards, ViewPatterns #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns, ViewPatterns #-}
 {-# LANGUAGE LambdaCase, TupleSections #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 module Brainfuck.CPU where
 
 import Clash.Prelude
 import Cactus.Clash.Util
+import Cactus.Clash.CPU
 
 import GHC.Generics (Generic, Generic1)
 import Control.DeepSeq
 
-import Control.Monad.Trans.Class as T
 import Control.Monad.State
-import Control.Monad.Trans.Cont
-import Control.Monad.Trans.Writer
+import Control.Monad.Cont
 import Data.Word
 import Data.Bits
 import Data.Char (chr)
@@ -90,35 +89,26 @@ pop = do
     CPUState{..} <- get
     return $ cpuStack !! cpuSP
 
-data W = W{ wOutput :: Last Word8
-          , wWrite :: Last (Ptr, Word8)
-          -- , wInput :: Any
-          }
-instance Semigroup W where
-    W o1 w1 <> W o2 w2 = W (o1 <> o2) (w1 <> w2)
-
-instance Monoid W where
-    mempty = W mempty mempty
-
-cpuOut :: CPUState -> W -> CPUOut
-cpuOut CPUState{..} W{..} = CPUOut
+cpuOut :: CPUState -> CPUOut
+cpuOut CPUState{..} = CPUOut
     { cpuOutPC = cpuPC
     , cpuOutPtr = cpuPtr
-    , cpuOutWrite = getLast wWrite
-    , cpuOutOutput = getLast wOutput
+    , cpuOutWrite = Nothing
+    , cpuOutOutput = Nothing
     , cpuOutNeedInput = cpuState == WaitInput
     }
 
-type CPU r = ContT r (WriterT W (State CPUState))
+stepCPU :: CPUIn -> State CPUState (CPUState, CPUOut)
+stepCPU = runCPUDebug cpuOut $ do
+    CPUIn{..} <- input
 
-stepCPU' :: CPUIn -> CPU () ()
-stepCPU' cpuIn@CPUIn{..} = resetT $ do
-    wait
     s <- get
     case cpuState s of
+        _ | cpuWaitMem s -> do
+            modify $ \s -> s{ cpuWaitMem = False }
         Halt -> return ()
         Skip n -> do
-            fetch cpuIn >>= \op -> case op of
+            fetch $ \op -> case op of
                 StartLoop -> goto $ Skip $ n + 1
                 EndLoop -> goto $ if n == 0 then Exec else Skip (n - 1)
                 _ -> return ()
@@ -130,7 +120,7 @@ stepCPU' cpuIn@CPUIn{..} = resetT $ do
             Just input -> do
                 goto Exec
                 write (cpuPtr s) input
-        Exec -> fetch cpuIn >>= \op -> case op of
+        Exec -> fetch $ \op -> case op of
             IncPtr -> do
                 modifyPtr succ
             DecPtr -> do
@@ -154,36 +144,22 @@ stepCPU' cpuIn@CPUIn{..} = resetT $ do
             NULL -> do
                 goto Halt
   where
-    break = shiftT $ \k -> return ()
-
-    fetch CPUIn{..} = do
+    fetch cb = do
         modify $ \s -> s{ cpuPC = cpuPC s + 1 }
-        maybe break return $ decode cpuInProg
+        CPUIn{cpuInProg} <- input
+        mapM_ cb $ decode cpuInProg
 
     goto st = modify $ \s -> s{ cpuState = st }
     jump pc = modify $ \s -> s{ cpuPC = pc }
     modifyPtr f = modify $ \s -> s{ cpuPtr = f $ cpuPtr s }
 
-    wait = do
-        waiting <- gets cpuWaitMem
-        when waiting $ do
-            modify $ \s -> s{ cpuWaitMem = False}
-            break
-
     write addr x = do
         modify $ \s -> s{ cpuWaitMem = True }
-        T.lift $ tell $ mempty{ wWrite = Last . Just $ (addr, x) }
+        tell $ \out -> out{ cpuOutWrite = Just (addr, x) }
 
     output x = do
-        T.lift $ tell $ mempty{ wOutput = Last . Just $ x }
+        tell $ \out -> out{ cpuOutOutput = Just x }
         goto WaitOutput
-
-stepCPU :: CPUIn -> State CPUState (CPUState, CPUOut)
-stepCPU cpuIn = do
-    s0 <- get
-    w <- execWriterT . evalContT $ stepCPU' cpuIn
-    s <- get
-    return (s0, cpuOut s w)
 
 ascii :: Word8 -> Char
 ascii = chr . fromIntegral
