@@ -59,32 +59,33 @@ decodePS2 = flip mealyState Idle $ \bit -> fmap getLast . execWriterT . forM_ bi
 data KeyEvent = KeyPress | KeyRelease
     deriving (Generic, NFData, Eq, Show)
 
-data ScanCode = ScanCode KeyEvent Word16
+data ScanCode = ScanCode KeyEvent Bool Word8
     deriving (Generic, NFData, Eq, Show)
 
 data ScanState
     = Init
-    | Extended Word8
-    | Code KeyEvent Word8
+    | Extended
+    | Code KeyEvent Bool
 
 -- TODO: rewrite this for clarity.
--- All it does is it parses 0xE0 0xXX into an extended (16-bit) code, and everything else into
--- an 8-bit code. The only complication is that the key release marker 0xF0 is always the
--- second-to-last byte. Who does that?!?
+-- All it does is it parses 0xE0 0xXX into an extended code, and
+-- everything else into an 8-bit code. The only complication is that
+-- the key release marker 0xF0 is always the second-to-last byte. Who
+-- does that?!?
 parseScanCode
     :: (HiddenClockReset dom gated synchronous)
     => Signal dom (Maybe Word8) -> Signal dom (Maybe ScanCode)
 parseScanCode = flip mealyState Init $ \raw -> fmap getLast . execWriterT . forM_ raw $ \raw -> do
     let finish ev ext = do
-            tell $ Last . Just $ ScanCode ev $ fromBytes (ext, raw)
+            tell $ Last . Just $ ScanCode ev ext raw
             put Init
     state <- get
     case state of
-        Init | raw == 0xe0 -> put $ Extended raw
-             | raw == 0xf0 -> put $ Code KeyRelease 0x00
-             | otherwise -> finish KeyPress 0x00
-        Extended ext | raw == 0xf0 -> put $ Code KeyRelease ext
-                     | otherwise -> finish KeyPress ext
+        Init | raw == 0xe0 -> put $ Extended
+             | raw == 0xf0 -> put $ Code KeyRelease False
+             | otherwise -> finish KeyPress False
+        Extended | raw == 0xf0 -> put $ Code KeyRelease True
+                 | otherwise -> finish KeyPress True
         Code ev ext -> finish ev ext
   where
     fromBytes :: (Word8, Word8) -> Word16
