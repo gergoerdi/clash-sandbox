@@ -82,18 +82,18 @@ muxRR next ss = let (mask, i) = unbundle $ moore step id (mask0, (0 :: Index n))
 
     mask0 = repeat False <<+ True
 
-nextIdx :: (KnownNat n) => Index n -> Index n
-nextIdx = fromMaybe 0 . succIdx
+nextIdx :: (Eq a, Enum a, Bounded a) => a -> a
+nextIdx = fromMaybe minBound . succIdx
 
-prevIdx :: (KnownNat n) => Index n -> Index n
+prevIdx :: (Eq a, Enum a, Bounded a) => a -> a
 prevIdx = fromMaybe maxBound . predIdx
 
-succIdx :: (KnownNat n) => Index n -> Maybe (Index n)
+succIdx :: (Eq a, Enum a, Bounded a) => a -> Maybe a
 succIdx x | x == maxBound = Nothing
           | otherwise = Just $ succ x
 
-predIdx :: (KnownNat n) => Index n -> Maybe (Index n)
-predIdx x | x == 0 = Nothing
+predIdx :: (Eq a, Enum a, Bounded a) => a -> Maybe a
+predIdx x | x == minBound = Nothing
           | otherwise = Just $ pred x
 
 unsigned :: (KnownNat n) => SNat n -> Unsigned n -> Unsigned n
