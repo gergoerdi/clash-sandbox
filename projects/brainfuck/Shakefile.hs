@@ -6,8 +6,6 @@ clashProject = ClashProject
     , clashModule = "Brainfuck"
     , clashTopName = "Brainfuck"
     , topName = "Top"
-    , ipCores = []
-    , vhdlSrcs = ["Top"]
     , clashFlags = ["-i../../lib/src-clash"]
     , shakeDir = "../../shake"
     }

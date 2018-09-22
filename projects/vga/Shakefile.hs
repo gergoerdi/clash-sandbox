@@ -6,8 +6,6 @@ clashProject = ClashProject
     , clashModule = "VGA"
     , clashTopName = "VGA"
     , topName = "Top"
-    , ipCores = ["ClockMan25"]
-    , vhdlSrcs = ["Top"]
     , clashFlags = ["-i../../lib/src-clash"]
     , shakeDir = "../../shake"
     }

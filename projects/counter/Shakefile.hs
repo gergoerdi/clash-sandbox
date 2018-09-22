@@ -6,8 +6,6 @@ clashProject = ClashProject
     , clashModule = "Counter"
     , clashTopName = "Counter"
     , topName = "CounterTop"
-    , ipCores = []
-    , vhdlSrcs = ["CounterTop"]
     , clashFlags = ["-i../../lib/src-clash"]
     , shakeDir = "../../shake"
     }
