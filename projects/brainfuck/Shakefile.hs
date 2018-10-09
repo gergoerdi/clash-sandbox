@@ -6,8 +6,8 @@ clashProject = ClashProject
     , clashModule = "Brainfuck"
     , clashTopName = "Brainfuck"
     , topName = "Top"
-    , clashFlags = ["-i../../lib/src-clash"]
-    , shakeDir = "../../shake"
+    , clashFlags = ["-i../../clash-utils/src-clash"]
+    , shakeDir = "../../clash-utils/shake"
     }
 
 main :: IO ()

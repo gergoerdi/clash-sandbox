@@ -6,8 +6,10 @@ clashProject = ClashProject
     , clashModule = "Serial"
     , clashTopName = "Serial"
     , topName = "Top"
-    , clashFlags = ["-i../../lib/src-clash", "-Wno-partial-type-signatures"]
-    , shakeDir = "../../shake"
+    , clashFlags = [ "-i../../clash-utils/src-clash"
+                   , "-Wno-partial-type-signatures"
+                   ]
+    , shakeDir = "../../clash-utils/shake"
     }
 
 main :: IO ()
